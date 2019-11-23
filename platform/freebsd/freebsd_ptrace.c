@@ -220,6 +220,7 @@ unsigned long ptrace_remote_syscall(struct ptrace_child *child,
                                     unsigned long p0, unsigned long p1,
                                     unsigned long p2, unsigned long p3,
                                     unsigned long p4, unsigned long p5) {
+    struct ptrace_sc_ret psr;
     unsigned long rv;
     if (ptrace_advance_to_state(child, ptrace_at_syscall) < 0)
         return -1;
@@ -240,8 +241,7 @@ unsigned long ptrace_remote_syscall(struct ptrace_child *child,
     if (ptrace_advance_to_state(child, ptrace_after_syscall) < 0)
         return -1;
 
-    rv = arch_get_register(child, personality(child)->syscall_rv);
-    if (child->error)
+    if (child->error || ptrace_command(child, PT_GET_SC_RET, &psr, sizeof(psr)) < 0)
         return -1;
 
     setreg(reg_ip, *(unsigned long*)((void*)&child->regs +
@@ -249,6 +249,10 @@ unsigned long ptrace_remote_syscall(struct ptrace_child *child,
 
 #undef setreg
 
+    if (psr.sr_error != 0)
+        rv = -psr.sr_error;
+    else
+        rv = psr.sr_retval[0];
     return rv;
 }
 
